@@ -130,8 +130,17 @@ export async function defaultNodeSetup(options) {
         }),
         new PreopenDirectory("/", rootFs),
     ], { debug: false })
-    const pkgDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-    const module = await WebAssembly.compile(await readFile(path.join(pkgDir, MODULE_PATH)))
+    // Try to locate the WASM module - handle both bundled (1 level up) and unbundled (2 levels up) scenarios
+    const currentDir = path.dirname(fileURLToPath(import.meta.url))
+    const { access } = await import("node:fs/promises")
+    let wasmPath = path.join(currentDir, MODULE_PATH)
+    try {
+        await access(wasmPath)
+    } catch {
+        // If not found in same directory, try parent directory (unbundled case)
+        wasmPath = path.join(path.dirname(currentDir), MODULE_PATH)
+    }
+    const module = await WebAssembly.compile(await readFile(wasmPath))
 /* #if USE_SHARED_MEMORY */
     const memory = new WebAssembly.Memory(MEMORY_TYPE);
     const threadChannel = new DefaultNodeThreadRegistry(options.spawnWorker)
